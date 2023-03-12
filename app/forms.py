@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField, TextAreaField
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, TextAreaField, SelectField
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length
-from app.models import User, Certificate
+from app.models import User, Certificate, Kantone
 
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
@@ -28,11 +28,11 @@ class RegistrationForm(FlaskForm):
             raise ValidationError('Please use a different email address.')
 
 class CSRForm(FlaskForm):
-    country = StringField('Country', validators=[DataRequired()])
-    state = StringField('State', validators=[DataRequired()])
-    locality = StringField('Locality', validators=[DataRequired()])
+    country = StringField('Country', validators=[DataRequired(), Length(min=2, max=2)], default='CH')
+    state = SelectField('State', validators=[DataRequired()], choices=[(k.abbr, k.name) for k in Kantone.query.all()])
+    locality = SelectField('Locality', validators=[DataRequired()], choices=[(k.name, k.name) for k in Kantone.query.all()])
     organization = StringField('Organization', validators=[DataRequired()])
-    organizational_unit = StringField('Organizational Unit', validators=[DataRequired()])
+    organizational_unit = StringField('Organizational Unit')
     common_name = StringField('Common Name', validators=[DataRequired()])
     subject_alternative_name = StringField('Subject Alternative Name')
     submit = SubmitField('Generate CSR')

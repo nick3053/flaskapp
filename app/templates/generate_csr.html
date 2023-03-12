@@ -12,14 +12,14 @@
       </p>
       <p>
         {{ form.state.label }}<br>
-        {{ form.state(size=32) }}<br>
+        {{ form.state }}<br>
         {% for error in form.state.errors %}
         <span style="color: red;">[{{ error }}]</span>
         {% endfor %}
     </p>
     <p>
       {{ form.locality.label }}<br>
-      {{ form.locality(size=32) }}<br>
+      {{ form.locality }}<br>
       {% for error in form.locality.errors %}
       <span style="color: red;">[{{ error }}]</span>
       {% endfor %}
@@ -45,6 +45,15 @@
     <span style="color: red;">[{{ error }}]</span>
     {% endfor %}
   </p>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <ul class="flashes">
+      {% for message in messages %}
+      <li>{{ message }}</li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
   <p>
     {{ form.subject_alternative_name.label }}<br>
     {{ form.subject_alternative_name(size=32) }}<br>

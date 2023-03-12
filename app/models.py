@@ -30,9 +30,25 @@ class Certificate(db.Model):
     timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
     csr = db.Column(db.LargeBinary)
     key = db.Column(db.LargeBinary)
-    cn = db.Column(db.String(64))
-    organization = db.Column(db.String(64))
+    cn = db.Column(db.String(64), index=True)
+    organization = db.Column(db.String(64), index=True)
     pfx = db.Column(db.LargeBinary)
     
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'timestamp': self.timestamp,
+            'cn': self.cn,
+            'organization': self.organization,
+        }
+
     def __repr__(self):
         return '<Certificate {}>}'.format(self.csr)
+    
+class Kantone(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(64), unique=True, nullable=False)
+    abbr = db.Column(db.String(2), unique=True, nullable=False)
+
+    def __repr__(self):
+        return '<Kantone {}>'.format(self.name)

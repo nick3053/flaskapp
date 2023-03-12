@@ -24,17 +24,25 @@
         <th>Organization</th>
         <th>CSR</th>
         <th>Key</th>
+        <th>PFX</th>
         <th>Delete</th>
       </tr>
     </thead>
+    <tbody>
+    </tbody>
     <tbody>
       {% for certificate in certificates %}
         <tr>
           <td>{{ certificate.timestamp }}</td>
           <td>{{ certificate.cn }}</td>
           <td>{{ certificate.organization }}</td>
-          <td><a href="{{ url_for('download_csr', id=certificate.id) }}">Download CSR</a></td>
-          <td><a href="{{ url_for('download_key', id=certificate.id) }}">Download Key</a></td>
+          <td><a href="{{ url_for('download_csr', cn=certificate.cn) }}">Download CSR</a></td>
+          <td><a href="{{ url_for('download_key', cn=certificate.cn) }}">Download Key</a></td>
+          {% if certificate.pfx %}
+            <td><a href="{{ url_for('download_pfx', cn=certificate.cn) }}">Download PFX</a></td>
+          {% else %}
+            <td>No PFX yet</td>
+          {% endif %}
           <td>
             <form method="post" action="{{ url_for('delete_certificate', id=certificate.id) }}" onsubmit="return confirm('Are you sure you want to delete this certificate?');">
               <input type="hidden" name="id" value="{{ certificate.id }}">
@@ -45,4 +53,50 @@
       {% endfor %}
     </tbody>
   </table>
+{% endblock %}
+
+{% block scripts %}
+<!--   <script>  
+    $(document).ready(function () {
+      $('#data').DataTable({
+        ajax: '/api/data',
+        serverSide: true,
+        columns: [
+          {data: 'timestamp', orderable: false},
+          {data: 'cn'},
+          {data: 'organization'},
+          {data: 'id', orderable: false},
+          {data: 'id', orderable: false},
+          {data: 'id', orderable: false},
+          {data: 'id', orderable: false},
+        ],
+        columnDefs: [
+          {
+            targets: 4,
+            render: function (data, type, row) {
+              return data ? '<a href="/certificate/' + row.id + '/download">Download CSR</a>' : 'No Key';
+            },
+          },
+          {
+            targets: 5,
+            render: function (data, type, row) {
+              return data ? '<a href="/key/' + row.id + '/download">Download Key</a>' : 'No Key';
+            },
+          },
+          {
+            targets: 6,
+            render: function (data, type, row) {
+              return data ? '<a href="/download_pfx/' + row.id + '">Download PFX</a>' : 'No PFX yet';
+            },
+          },
+          {
+            targets: 7,
+            render: function (data, type, row) {
+              return '<form method="post" action="/delete_certificate/' + row.id + '" onsubmit="return confirm(\'Are you sure you want to delete this certificate?\');"><button type="submit" class="btn btn-sm btn-outline-danger">Delete</button></form>';
+              }
+          }
+        ]
+      });
+    });
+  </script> -->
 {% endblock %}

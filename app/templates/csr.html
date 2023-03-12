@@ -15,10 +15,10 @@
     <tbody>
         <tr>
           <td>{{ csr }}
-            <a href="{{ url_for('download_new_csr') }}">Download CSR</a>
+            <a href="{{ url_for('download_csr', cn=cn) }}">Download CSR</a>
           </td>
           <td>{{ key }}
-            <a href="{{ url_for('download_new_key') }}">Download Key</a>
+            <a href="{{ url_for('download_key', cn=cn) }}">Download Key</a>
         </td>
         </tr>
     </tbody>

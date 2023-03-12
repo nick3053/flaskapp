@@ -1,9 +1,9 @@
 from io import BytesIO
-from flask import render_template, flash, redirect, url_for, make_response, send_file, Response
+from flask import render_template, flash, redirect, url_for, make_response, send_file, Response, abort
 from app import app, db
 from app.forms import LoginForm, RegistrationForm, CSRForm, CertForm, EditProfileForm, ResetPasswordForm, ConvertCertificateForm
 from flask_login import current_user, login_user
-from app.models import User, Certificate
+from app.models import User, Certificate, Kantone
 from flask_login import logout_user
 from flask_login import login_required
 from flask import request
@@ -73,6 +73,12 @@ def generate_csr():
         common_name = data['common_name']
         subject_alternative_name = data['subject_alternative_name']
 
+        # Check if CSR with common name already exists
+        existing_csr = Certificate.query.filter_by(cn=common_name, user_id=current_user.id).first()
+        if existing_csr:
+            flash(f"A certificate with common name '{common_name}' already exists.")
+            return render_template("generate_csr.html", title='Generate CSR', form=form, data=data)
+
         #Create Keypair
         keypair = crypto.PKey()
         keypair.generate_key(crypto.TYPE_RSA, 2048)
@@ -107,7 +113,7 @@ def generate_csr():
         db.session.commit()
         
         #response = b'\n'.join([csr, key])
-        return render_template('csr.html', csr=csr, key=key)
+        return render_template('csr.html', cn=common_name,csr=csr, key=key)
 
 
     return render_template("generate_csr.html", title='Generate CSR', form=form)
@@ -119,7 +125,7 @@ def download_certificate():
     if form.validate_on_submit():
         try:
             # Load the existing key from the database
-            existing_key = Certificate.query.filter_by(cn=form.common_name.data).first()
+            existing_key = Certificate.query.filter_by(cn=form.common_name.data, user_id=current_user.id).first()
             private_key = existing_key.key
             if not existing_key:
                 flash('The Private Key for the Common Name in the CSR does not exist in the database')
@@ -141,9 +147,14 @@ def download_certificate():
             pfx.set_certificate(cert)
             pfx_data = pfx.export(passphrase=passphrase)
 
+            # Save the PFX to the database
+            existing_key.pfx = pfx_data
+            db.session.commit()
+
             # Return the PFX as a download
+            filename = existing_key.cn + '.pfx'
             response = make_response(pfx_data)
-            response.headers.set('Content-Disposition', 'attachment', filename='certificate.pfx')
+            response.headers['Content-Disposition'] = 'attachment; filename={}'.format(filename)
             response.headers.set('Content-Type', 'application/x-pkcs12')
             return response
         
@@ -187,26 +198,30 @@ def convert_certificate():
         
     return render_template('convert_certificate.html', title='Convert Certificate', form=form)    
 
-@app.route('/csr/download')
+@app.route('/csr/download/<string:cn>')
 @login_required
-def download_new_csr():
-    cert = Certificate.query.filter_by(author=current_user).order_by(Certificate.id.desc()).first()
-    file_data = cert.csr
+def download_csr(cn):
+    csr = Certificate.query.filter_by(cn=cn, user_id=current_user.id).first()
+    if csr is None:
+        abort(404)
+    file_data = csr.csr
     # Create an in-memory file-like object
     file_stream = BytesIO(file_data)
     # Set the file stream's position to the beginning
     file_stream.seek(0)
     # Return the file as an attachment
-    filename = cert.cn + '.csr'
+    filename = csr.cn + '.csr'
     response = make_response(file_stream.getvalue())
     response.headers['Content-Disposition'] = 'attachment; filename={}'.format(filename)
     response.mimetype = 'text/plain'
     return response
 
-@app.route('/key/download')
+@app.route('/key/download/<string:cn>')
 @login_required
-def download_new_key():
-    key = Certificate.query.filter_by(author=current_user).order_by(Certificate.id.desc()).first()
+def download_key(cn):
+    key = Certificate.query.filter_by(cn=cn, user_id=current_user.id).first()
+    if key is None:
+        abort(404)
     file_data = key.key
     # Create an in-memory file-like object
     file_stream = BytesIO(file_data)
@@ -219,36 +234,17 @@ def download_new_key():
     response.mimetype = 'text/plain'
     return response
 
-@app.route('/certificate/<int:id>/download')
+@app.route('/pfx/download/<string:cn>')
 @login_required
-def download_csr(id):
-    cert = Certificate.query.get_or_404(id)
-    file_data = cert.csr
-    # Create an in-memory file-like object
-    file_stream = BytesIO(file_data)
-    # Set the file stream's position to the beginning
-    file_stream.seek(0)
-    # Return the file as an attachment
-    filename = cert.cn + '.csr'
-    response = make_response(file_stream.getvalue())
+def download_pfx(cn):
+    certificate = Certificate.query.filter_by(cn=cn, user_id=current_user.id).first()
+    if certificate is None:
+        abort(404)
+    pfx_data = certificate.pfx
+    filename = certificate.cn + '.pfx'
+    response = make_response(pfx_data)
     response.headers['Content-Disposition'] = 'attachment; filename={}'.format(filename)
-    response.mimetype = 'text/plain'
-    return response
-
-@app.route('/key/<int:id>/download')
-@login_required
-def download_key(id):
-    key = Certificate.query.get_or_404(id)
-    file_data = key.key
-    # Create an in-memory file-like object
-    file_stream = BytesIO(file_data)
-    # Set the file stream's position to the beginning
-    file_stream.seek(0)
-    # Return the file as an attachment
-    filename = key.cn + '.key'
-    response = make_response(file_stream.getvalue())
-    response.headers['Content-Disposition'] = 'attachment; filename={}'.format(filename)
-    response.mimetype = 'text/plain'
+    response.headers.set('Content-Type', 'application/x-pkcs12')
     return response
 
 @app.route('/user/<username>')
@@ -283,7 +279,7 @@ def reset_password_request():
             current_user.set_password(form.new_password.data)
             db.session.commit()
             flash('Your password has been updated.')
-            return redirect(url_for('profile_updated'))
+            return redirect(url_for('user', username=current_user.username))
         else:
             flash('Invalid old password.')
     return render_template('reset_password_request.html', title='Reset Password', form=form)
@@ -292,7 +288,52 @@ def reset_password_request():
 @login_required
 def delete_certificate(id):
     certificate = Certificate.query.get_or_404(id)
+    if certificate.user_id != current_user.id:
+        abort(403)
     db.session.delete(certificate)
     db.session.commit()
     flash('Certificate deleted.')
     return redirect(url_for('user', username=current_user.username))
+
+@app.route('/api/data')
+def data():
+    query = Certificate.query
+    search = request.args.get('search[value]')
+    if search:
+        query = query.filter(db.or_(
+            Certificate.cn.like(f'%{search}%'),
+            Certificate.organization.like(f'%{search}%'),
+        ))
+    total_filtered = query.count()
+
+    #sorting
+    order = []
+    i = 0
+    while True:
+        col_index = request.args.get(f'order[{i}][column]')
+        if not col_index:
+            break 
+        col_name = request.args.get(f'columns[{col_index}][data]')
+        if col_name not in ['cn', 'organization']:
+           col_name = 'cn'
+        descending = request.args.get(f'order[{i}][dir]') == 'desc'
+        col = getattr(Certificate, col_name)
+        if descending:
+            col = col.desc()
+        order.append(col)
+        i += 1
+    if order:
+        query = query.order_by(*order)
+
+    #pagination
+    start = request.args.get('start', type=int)
+    length = request.args.get('length', type=int)
+    query = query.offset(start).limit(length)
+
+    #response
+    return {
+        'data': [certificate.to_dict() for certificate in query],
+        'recordsfiltered': total_filtered,
+        'recordsTotal': Certificate.query.count(),
+        'draw': request.args.get('draw', type=int),
+    }
